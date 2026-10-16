@@ -14,6 +14,12 @@ import { apiLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
 
+// Render terminates TLS and forwards requests through one trusted proxy hop.
+// Set TRUST_PROXY_HOPS explicitly when the deployment topology changes.
+const proxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS || (process.env.NODE_ENV === 'production' ? '1' : '0'), 10);
+if (Number.isInteger(proxyHops) && proxyHops >= 0 && proxyHops <= 5) app.set('trust proxy', proxyHops);
+else throw new Error('TRUST_PROXY_HOPS must be an integer from 0 to 5.');
+
 // Disable Express fingerprinting
 app.disable('x-powered-by');
 
@@ -23,7 +29,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://checkout.razorpay.com'],
+      scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https://images.unsplash.com', 'https://cdn.razorpay.com'],

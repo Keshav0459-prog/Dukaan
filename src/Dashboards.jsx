@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, BadgeCheck, Box, Check, CircleAlert, ClipboardList, LayoutDashboard, LoaderCircle, LogIn, Package, Plus, Store, UserRound, X } from 'lucide-react';
 import './dashboards.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://dukaan-marketplace-api.onrender.com';
 const money = value => '₹' + Number(value || 0).toLocaleString('en-IN');
 const tokenKey = 'dukaan-customer-token';
 const request = async (path, token, options = {}) => {
@@ -25,7 +25,7 @@ function OrderHistory({ orders }) {
 }
 
 export default function DashboardPage({ type, onBack }) {
-  const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || '');
+  const [token, setToken] = useState(() => sessionStorage.getItem(tokenKey) || '');
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState('login');
   const [auth, setAuth] = useState({ name: '', email: '', password: '' });
@@ -60,7 +60,7 @@ export default function DashboardPage({ type, onBack }) {
           if (!cancelled) setData({ overview, products, orders, sellers });
         }
       } catch (e) {
-        if (!cancelled) { setError(e.message); if (e.message.includes('session') || e.message.includes('Account not found')) { localStorage.removeItem(tokenKey); localStorage.removeItem('dukaan-admin-token'); setToken(''); } }
+        if (!cancelled) { setError(e.message); if (e.message.includes('session') || e.message.includes('Account not found')) { sessionStorage.removeItem(tokenKey); sessionStorage.removeItem('dukaan-admin-token'); setToken(''); } }
       } finally { if (!cancelled) setBusy(false); }
     })();
     return () => { cancelled = true; };
@@ -72,8 +72,8 @@ export default function DashboardPage({ type, onBack }) {
       const path = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
       const payload = authMode === 'register' ? { name: auth.name, email: auth.email, password: auth.password } : { email: auth.email, password: auth.password };
       const result = await request(path, '', { method: 'POST', body: JSON.stringify(payload) });
-      localStorage.setItem(tokenKey, result.token);
-      if (result.user.role === 'admin') localStorage.setItem('dukaan-admin-token', result.token);
+      sessionStorage.setItem(tokenKey, result.token);
+      if (result.user.role === 'admin') sessionStorage.setItem('dukaan-admin-token', result.token);
       setToken(result.token); setUser(result.user); setNotice('Signed in successfully.');
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
@@ -82,7 +82,7 @@ export default function DashboardPage({ type, onBack }) {
     try { await request(path, token, { method, ...(body ? { body: JSON.stringify(body) } : {}) }); setNotice(success); setReload(n => n + 1); }
     catch (e) { setError(e.message); } finally { setBusy(false); }
   }
-  function signOut() { localStorage.removeItem(tokenKey); localStorage.removeItem('dukaan-admin-token'); setToken(''); setUser(null); setData({ orders: [], products: [], sellers: [], overview: null }); }
+  function signOut() { sessionStorage.removeItem(tokenKey); sessionStorage.removeItem('dukaan-admin-token'); setToken(''); setUser(null); setData({ orders: [], products: [], sellers: [], overview: null }); }
   async function applySeller(event) { event.preventDefault(); await mutate('/api/auth/seller/apply', 'POST', { storeName }, 'Seller application sent to the Dukaan team.'); }
   async function addProduct(event) {
     event.preventDefault();

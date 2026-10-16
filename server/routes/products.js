@@ -161,6 +161,24 @@ function consumeAiBudget() {
   return true;
 }
 
+async function consumePersistentAiBudget() {
+  // Mongo's _id uniqueness makes this an atomic per-day counter across restarts
+  // and multiple API instances. Fail closed in production if persistence is down.
+  if (mongoose.connection.readyState !== 1) {
+    if (process.env.NODE_ENV === 'production') return false;
+    return consumeAiBudget();
+  }
+  const day = new Date().toISOString().slice(0, 10);
+  const collection = mongoose.connection.collection('price_compare_usage');
+  const result = await collection.findOneAndUpdate(
+    { _id: day },
+    { $inc: { count: 1 }, $setOnInsert: { createdAt: new Date() } },
+    { upsert: true, returnDocument: 'after' }
+  );
+  const count = result?.value?.count ?? result?.count;
+  return Number(count) <= DAILY_AI_BUDGET;
+}
+
 router.get('/:id/price-comparison', publicPriceCompareLimiter, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -180,7 +198,7 @@ router.get('/:id/price-comparison', publicPriceCompareLimiter, async (req, res, 
       return res.json(cached.result);
     }
 
-    if (!consumeAiBudget()) {
+    if (!(await consumePersistentAiBudget())) {
       return res.status(429).json({
         message: 'Daily AI price check quota reached. Please view our store catalog or check back tomorrow.'
       });
