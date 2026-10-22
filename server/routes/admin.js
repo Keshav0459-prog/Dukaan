@@ -4,7 +4,7 @@ import { competitorPriceLimiter } from '../middleware/rateLimiter.js';
 import Product from '../models/Product.js';
 import Order from '../models/Order.js';
 import User from '../models/User.js';
-import { comparePrices } from '../services/competitorPrices.js';
+import { findCachedPriceComparison, getPriceComparison } from '../services/priceComparisonCache.js';
 import mongoose from 'mongoose';
 import { isValidObjectId, isValidSKU, sanitizeString, isSafeNumber } from '../utils/validation.js';
 
@@ -14,7 +14,7 @@ router.use(requireAuth, requireAdmin);
 const ALLOWED_CATEGORIES = ['Electronics', 'Fashion', 'Beauty', 'Home', 'Kitchen', 'Sports', 'Accessories', 'Books'];
 
 // Competitor Price Comparison with Rate Limiting
-router.post('/competitor-prices', competitorPriceLimiter, async (req, res, next) => {
+router.post('/competitor-prices', async (req, res, next) => {
   try {
     const name = sanitizeString(req.body.productName, 180);
     if (!name) {
@@ -22,10 +22,18 @@ router.post('/competitor-prices', competitorPriceLimiter, async (req, res, next)
     }
 
     const category = sanitizeString(req.body.category, 80);
+    const brand = sanitizeString(req.body.brand, 100);
     const price = isSafeNumber(req.body.price, 0) ? Number(req.body.price) : undefined;
 
-    const result = await comparePrices({ name, category, price });
-    res.json(result);
+    const product = { name, brand, category, price };
+    const cached = await findCachedPriceComparison(product);
+    if (cached) return res.json(cached);
+
+    return competitorPriceLimiter(req, res, () => {
+      getPriceComparison(product, { cacheChecked: true })
+        .then(result => res.json(result))
+        .catch(next);
+    });
   } catch (e) {
     next(e);
   }

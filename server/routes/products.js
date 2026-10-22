@@ -4,15 +4,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Product from '../models/Product.js';
 import { publicPriceCompareLimiter } from '../middleware/rateLimiter.js';
-import { comparePrices } from '../services/competitorPrices.js';
+import { findCachedPriceComparison, getPriceComparison } from '../services/priceComparisonCache.js';
 import { isValidObjectId, sanitizeString, isSafeNumber } from '../utils/validation.js';
 
 const router = Router();
 const ALLOWED_CATEGORIES = ['Electronics', 'Fashion', 'Beauty', 'Home', 'Kitchen', 'Sports', 'Accessories', 'Books'];
 const ALLOWED_SORTS = ['newest', 'price-asc', 'price-desc'];
-const comparisonCache = new Map();
-const COMPARISON_CACHE_MS = 10 * 60 * 1000;
-
 const fallbackCatalog = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../catalog.json', import.meta.url)), 'utf8')
 ).map((p, index) => ({
@@ -144,42 +141,7 @@ router.get('/:id/recommendations', async (req, res, next) => {
   }
 });
 
-// Global daily AI price check budget / circuit breaker
-const DAILY_AI_BUDGET = Number(process.env.DAILY_AI_BUDGET) || 100;
-let dailyAiRequests = 0;
-let budgetCycleResetAt = Date.now() + 24 * 60 * 60 * 1000;
-
-function consumeAiBudget() {
-  if (Date.now() > budgetCycleResetAt) {
-    dailyAiRequests = 0;
-    budgetCycleResetAt = Date.now() + 24 * 60 * 60 * 1000;
-  }
-  if (dailyAiRequests >= DAILY_AI_BUDGET) {
-    return false;
-  }
-  dailyAiRequests++;
-  return true;
-}
-
-async function consumePersistentAiBudget() {
-  // Mongo's _id uniqueness makes this an atomic per-day counter across restarts
-  // and multiple API instances. Fail closed in production if persistence is down.
-  if (mongoose.connection.readyState !== 1) {
-    if (process.env.NODE_ENV === 'production') return false;
-    return consumeAiBudget();
-  }
-  const day = new Date().toISOString().slice(0, 10);
-  const collection = mongoose.connection.collection('price_compare_usage');
-  const result = await collection.findOneAndUpdate(
-    { _id: day },
-    { $inc: { count: 1 }, $setOnInsert: { createdAt: new Date() } },
-    { upsert: true, returnDocument: 'after' }
-  );
-  const count = result?.value?.count ?? result?.count;
-  return Number(count) <= DAILY_AI_BUDGET;
-}
-
-router.get('/:id/price-comparison', publicPriceCompareLimiter, async (req, res, next) => {
+router.get('/:id/price-comparison', async (req, res, next) => {
   try {
     const { id } = req.params;
     let product;
@@ -192,22 +154,20 @@ router.get('/:id/price-comparison', publicPriceCompareLimiter, async (req, res, 
 
     if (!product) return res.status(404).json({ message: 'Product not found.' });
 
-    const cacheKey = String(product.sku || product._id);
-    const cached = comparisonCache.get(cacheKey);
-    if (cached && Date.now() - cached.cachedAt < COMPARISON_CACHE_MS) {
-      return res.json(cached.result);
-    }
+    const comparisonProduct = {
+      name: product.name,
+      brand: product.brand,
+      category: product.category,
+      price: product.price
+    };
+    const cached = await findCachedPriceComparison(comparisonProduct);
+    if (cached) return res.json(cached);
 
-    if (!(await consumePersistentAiBudget())) {
-      return res.status(429).json({
-        message: 'Daily AI price check quota reached. Please view our store catalog or check back tomorrow.'
-      });
-    }
-
-    const result = await comparePrices({ name: product.name, category: product.category, price: product.price });
-    comparisonCache.set(cacheKey, { result, cachedAt: Date.now() });
-    if (comparisonCache.size > 100) comparisonCache.delete(comparisonCache.keys().next().value);
-    res.json(result);
+    return publicPriceCompareLimiter(req, res, () => {
+      getPriceComparison(comparisonProduct, { cacheChecked: true })
+        .then(result => res.json(result))
+        .catch(next);
+    });
   } catch (e) {
     next(e);
   }
