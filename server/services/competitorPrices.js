@@ -37,10 +37,10 @@ async function openRouterSearch(product) {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.CLIENT_URL || 'http://localhost:5173', 'X-Title': 'Dukaan price comparison' },
     body: JSON.stringify({
       model: process.env.OPENROUTER_PRICE_MODEL || 'google/gemini-2.5-flash',
-      max_tokens: 1500,
+      max_tokens: 1000,
       messages: [{ role: 'user', content: promptFor(product) }],
-      tools: [{ type: 'openrouter:web_search', parameters: { engine: 'exa', allowed_domains: allowedDomains, max_results: 5, max_total_results: 8, max_uses: 2 } }],
-      max_tool_calls: 4
+      tools: [{ type: 'openrouter:web_search', parameters: { engine: 'exa', allowed_domains: allowedDomains, max_results: 3, max_total_results: 5, max_uses: 1 } }],
+      max_tool_calls: 2
     }),
   });
   const data = await response.json().catch(() => ({}));
