@@ -1,0 +1,9 @@
+.env
+.env.*
+.render-env-upload
+.vercel-cli
+node_modules
+dist
+.git
+.vercel
+.codex-vercel

@@ -8,3 +8,7 @@ npm-debug.log*
 coverage/
 .DS_Store
 Thumbs.db
+.vercel
+.vercel-cli/
+.codex-vercel/
+.render-env-upload
