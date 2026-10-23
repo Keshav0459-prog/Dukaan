@@ -19,7 +19,7 @@ const trimJson = raw => {
   if (first < 0 || last <= first) throw new Error('Price search returned no structured result.');
   return JSON.parse(text.slice(first, last + 1));
 };
-const promptFor = ({ name, brand, category, price }) => `Find current public listing offers for the exact or closest matching product in India. Product: ${name}. Brand: ${brand || 'unknown'}. Category: ${category || 'unknown'}. Our current price: INR ${price ?? 'unknown'}. Search only these retailers: Amazon India (amazon.in), Flipkart (flipkart.com), Myntra (myntra.com), AJIO (ajio.com), Tata CLiQ (tatacliq.com), Nykaa (nykaa.com), Croma (croma.com), Reliance Digital (reliancedigital.in). Return JSON only: {"results":[{"retailer":"Amazon India|Flipkart|Myntra|AJIO|Tata CLiQ|Nykaa|Croma|Reliance Digital","productTitle":"...","priceInr":1234,"url":"https://...","match":"exact|close|uncertain","evidence":"short price evidence from search result","availability":"available|unknown"}]}. Include only prices you can see in live search results, do not infer or invent a price. Include a direct product page URL on that retailer's domain. If there is no verifiable offer, omit it. Prices are search snapshots and can change.`;
+const promptFor = ({ name, brand, category, price }) => `Find up to 2 current India price offers for this exact product (or closest match). Return compact JSON only. Product: ${name}. Brand: ${brand || 'unknown'}. Category: ${category || 'unknown'}. Our current price: INR ${price ?? 'unknown'}. Search only these retailers: Amazon India (amazon.in), Flipkart (flipkart.com), Myntra (myntra.com), AJIO (ajio.com), Tata CLiQ (tatacliq.com), Nykaa (nykaa.com), Croma (croma.com), Reliance Digital (reliancedigital.in). Return JSON only: {"results":[{"retailer":"Amazon India|Flipkart|Myntra|AJIO|Tata CLiQ|Nykaa|Croma|Reliance Digital","productTitle":"...","priceInr":1234,"url":"https://...","match":"exact|close|uncertain","evidence":"short price evidence from search result","availability":"available|unknown"}]}. Include only prices you can see in live search results, do not infer or invent a price. Include a direct product page URL on that retailer's domain. If there is no verifiable offer, omit it. Prices are search snapshots and can change.`;
 
 async function geminiSearch(product) {
   const model = process.env.GEMINI_PRICE_MODEL || 'gemini-2.5-flash';
@@ -37,10 +37,10 @@ async function openRouterSearch(product) {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.CLIENT_URL || 'http://localhost:5173', 'X-Title': 'Dukaan price comparison' },
     body: JSON.stringify({
       model: process.env.OPENROUTER_PRICE_MODEL || 'google/gemini-2.5-flash',
-      max_tokens: 500,
+      max_tokens: 600,
       messages: [{ role: 'user', content: promptFor(product) }],
-      tools: [{ type: 'openrouter:web_search', parameters: { engine: 'exa', allowed_domains: allowedDomains, max_results: 3, max_total_results: 5, max_uses: 1 } }],
-      max_tool_calls: 2
+      tools: [{ type: 'openrouter:web_search', parameters: { engine: 'exa', allowed_domains: allowedDomains, max_results: 2, max_total_results: 3, max_uses: 1 } }],
+      max_tool_calls: 1
     }),
   });
   const data = await response.json().catch(() => ({}));
