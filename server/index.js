@@ -131,7 +131,7 @@ try {
   await seedDemoCatalog();
   console.log('MongoDB connected and catalog seeded.');
 } catch (err) {
-  const requiresConfiguredDatabase = process.env.NODE_ENV === 'production' || Boolean(mongoUri);
+  const requiresConfiguredDatabase = process.env.NODE_ENV === 'production';
   console.warn('MongoDB connection failed:', err.message);
   if (requiresConfiguredDatabase) {
     console.error('FATAL: Configured database connection failed. Refusing to start in standalone mode.');

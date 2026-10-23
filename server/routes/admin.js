@@ -32,7 +32,11 @@ router.post('/competitor-prices', async (req, res, next) => {
     return competitorPriceLimiter(req, res, () => {
       getPriceComparison(product, { cacheChecked: true })
         .then(result => res.json(result))
-        .catch(next);
+        .catch(err => {
+          const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 503;
+          const message = err.message || 'Live price comparison is temporarily unavailable. Please try again.';
+          res.status(status).json({ message });
+        });
     });
   } catch (e) {
     next(e);
